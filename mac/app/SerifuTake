@@ -12,6 +12,28 @@ mkdir -p "$HOME/Library/Logs" "$SUP"
 [ -f "$LOG" ] && [ "$(stat -f%z "$LOG" 2>/dev/null || echo 0)" -gt 2000000 ] && mv -f "$LOG" "$LOG.1"
 echo "=== $(date) 起動 ($BUNDLE) ===" >>"$LOG"
 
+# 初回：起動役を Mac の中でちゃんとしたアプリ本体（launcher.c）に置き換える
+# （シェルのままだと、Mac が外付けディスクなどの許可の確認を出さずに断るため）
+case "$0" in
+  */Contents/MacOS/*)
+    CC="$(xcrun -f clang 2>/dev/null || command -v clang)"
+    if [ -n "$CC" ] && [ -f "$BUNDLE/Contents/Resources/launcher.c" ]; then
+      TMPB="$SUP/launcher.bin"
+      if "$CC" -O2 -o "$TMPB" "$BUNDLE/Contents/Resources/launcher.c" >>"$LOG" 2>&1; then
+        cp "$0" "$BUNDLE/Contents/Resources/launch.sh" && chmod +x "$BUNDLE/Contents/Resources/launch.sh"
+        mv -f "$TMPB" "$BUNDLE/Contents/MacOS/SerifuTake" && chmod +x "$BUNDLE/Contents/MacOS/SerifuTake"
+        xattr -cr "$BUNDLE" 2>/dev/null
+        codesign --force --deep --sign - "$BUNDLE" >>"$LOG" 2>&1
+        echo "起動役を置き換えました。起動し直します" >>"$LOG"
+        (sleep 1; open "$BUNDLE") >/dev/null 2>&1 &
+        exit 0
+      else
+        echo "clang で起動役を作れませんでした（このまま動かします）" >>"$LOG"
+      fi
+    fi
+    ;;
+esac
+
 # 署名（Mac の「リムーバブルボリューム」などの許可は署名のあるアプリにしか出ない）
 # 中身が変わって署名が合わなくなったときも付け直す（30秒以内の連続は避ける）
 if ! codesign -v "$BUNDLE" >/dev/null 2>&1; then

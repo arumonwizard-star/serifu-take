@@ -1,14 +1,14 @@
 {
- "version": "1.2.3",
+ "version": "1.2.4",
  "files": {
   "web/index.html": "119814b2359a3241b984772803aeb7cc8f668fcc",
   "web/style.css": "7ed3047d145c11ddc44a4853e2106bd52c438aad",
   "web/manifest.webmanifest": "8e03a0a3d40a20d6940e789fd22b3b7bdaa9d595",
-  "web/version.json": "a24ff2b705c5c866263a6bf8076db5aaafe5d043",
+  "web/version.json": "9a3504a63ddf66b4fd82a5772843ca269fc4a8b3",
   "web/sw.js": "e1b440cb11c6a7525d2acda7a61286367bced5e5",
   "web/js/align.js": "368464da078521606de8f749862214958b116a3a",
   "web/js/analysis.js": "fd115b71e0efcb7387506aed90d37fed0b5ac788",
-  "web/js/app.js": "02590b107dd7435eba2355718242f5dde2f976af",
+  "web/js/app.js": "3bca2eb274f6e1b57c3459706366537f538b7de6",
   "web/js/asr-worker.js": "50c3f1fa0919001e3d5e0a4f40e63da32d9ea3ef",
   "web/js/fcpxml.js": "5d967dab9ff0ee7e3d21d9dfe526fae3f14c6cd7",
   "web/js/media.js": "da6fde64818ebb4d3b9d5671ad03e9915f5f026d",
