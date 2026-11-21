@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.1.2';
+export const VERSION = '1.1.3';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -182,9 +182,30 @@ async function awaitJob(start) {
   }
 }
 
+// 画面内のフォルダ選択
+function browseFolder() {
+  return new Promise((resolve) => {
+    let cur = localStorage.getItem('st-lastdir') || '';
+    const draw = async (p) => {
+      const d = await withBusy(() => fetch('/api/dirs?p=' + encodeURIComponent(p || '')).then(r => r.json()));
+      cur = d.path;
+      openSheet(`<h2>素材フォルダ選択<span class="sp"></span><button id="fbCancel">キャンセル</button><button id="fbOk" class="primary">このフォルダを選択</button></h2>
+        <div class="fb"><div class="fbPlaces">${d.places.map(x => `<div class="fbPlace${cur === x.path || cur.startsWith(x.path + '/') && x.path !== d.places[0].path ? ' on' : ''}" data-p="${esc(x.path)}">${esc(x.name)}</div>`).join('')}</div>
+        <div class="fbMain"><div class="fbPath">${d.parent ? `<button data-p="${esc(d.parent)}">上へ</button>` : ''}<span>${esc(d.path)}</span><span class="fbCnt">素材 ${d.media}</span></div>
+        <div class="fbList">${d.error ? `<div class="empty">開けません：${esc(d.error)}</div>` : ''}${d.dirs.map(n => `<div class="fbDir" data-p="${esc(d.path.replace(/\/$/, '') + '/' + n)}">${esc(n)}</div>`).join('') || (d.error ? '' : '<div class="empty">フォルダなし</div>')}</div></div></div>`);
+      $('#fbCancel').onclick = () => { closeSheet(); resolve(null); };
+      $('#fbOk').onclick = () => { localStorage.setItem('st-lastdir', cur); closeSheet(); resolve(cur); };
+      $('#sheetIn').querySelectorAll('[data-p]').forEach(n => n.onclick = () => draw(n.dataset.p));
+    };
+    draw(cur);
+  });
+}
+
 async function pickFolder() {
   if (LOCAL) {
-    const r = await awaitJob(fetch('/api/pick-folder', { method: 'POST' }).then(r => r.json()));
+    const path = await browseFolder();
+    if (!path) return;
+    const r = await withBusy(() => awaitJob(fetch('/api/pick-folder', { method: 'POST', body: JSON.stringify({ path }) }).then(r => r.json())));
     if (r && r.error) { toast('フォルダを開けませんでした：' + r.error); return; }
     if (!r || r.cancel || !r.path) return;
     P.roots = [...new Set([...(P.roots || []), r.path])];
@@ -1299,7 +1320,7 @@ function doExport() {
       if (r && r.error) { toast('保存できませんでした：' + r.error); return; }
       if (!r || r.cancel) return;
       closeSheet();
-      toast(r.opened ? `書き出してFinal Cut Proで表示しました（${clips.length}カット）` : `書き出しました（${clips.length}カット）`);
+      toast(r.opened ? `Final Cut Proで開きました（${clips.length}カット）・${r.path.split('/').pop()}` : `書き出しました：${r.path}`);
     });
     return;
   }

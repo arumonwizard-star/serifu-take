@@ -20,7 +20,12 @@ try:
         pg.goto('http://127.0.0.1:8795/')
         pg.wait_for_function('window.__st', timeout=20000); time.sleep(1.5)
         pg.click('#bScript'); pg.fill('#sText', SCRIPT); pg.click('#sApply'); time.sleep(1)
-        pg.click('#bAdd')
+        pg.evaluate("p => localStorage.setItem('st-lastdir', p)", os.path.join(ROOT, 'tests'))
+        pg.click('#bAdd'); time.sleep(1)
+        pg.screenshot(path=os.path.join(ROOT, 'tests/mac0.png'))
+        pg.click('.fbDir >> text=media'); time.sleep(0.8)
+        print('folder:', pg.inner_text('.fbPath'))
+        pg.click('#fbOk')
         for i in range(90):
             st = pg.inner_text('#status')
             if '整理済み' in st or 'エラー' in st: break

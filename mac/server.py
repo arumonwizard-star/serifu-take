@@ -126,6 +126,39 @@ def list_folder(root):
     return out
 
 
+def list_dirs(p):
+    """画面内のフォルダ選択用：フォルダの中身（フォルダと素材の数）"""
+    home = Path.home()
+    places = [{"name": "ホーム", "path": str(home)}]
+    for n in ("Movies", "Desktop", "Documents", "Downloads"):
+        if (home / n).is_dir():
+            places.append({"name": {"Movies": "ムービー", "Desktop": "デスクトップ", "Documents": "書類", "Downloads": "ダウンロード"}[n], "path": str(home / n)})
+    try:
+        for v in sorted(Path("/Volumes").iterdir()):
+            if v.is_dir() and not v.name.startswith(".") and v.name != "Macintosh HD":
+                places.append({"name": v.name, "path": str(v)})
+    except Exception:
+        pass
+    cur = Path(p) if p else home
+    dirs, media = [], 0
+    err = None
+    try:
+        for e in sorted(cur.iterdir(), key=lambda x: x.name.lower()):
+            if e.name.startswith("."):
+                continue
+            try:
+                if e.is_dir() and not e.name.endswith((".fcpbundle", ".app", ".photoslibrary")):
+                    dirs.append(e.name)
+                elif e.suffix.lower() in MEDIA_EXT:
+                    media += 1
+            except OSError:
+                pass
+    except Exception as ex:
+        err = str(ex)
+    parent = str(cur.parent) if cur.parent != cur else None
+    return {"path": str(cur), "parent": parent, "dirs": dirs, "media": media, "places": places, "error": err}
+
+
 def write_wav16(path, pcm_f32_bytes):
     n = len(pcm_f32_bytes) // 4
     samples = struct.unpack("<%df" % n, pcm_f32_bytes[: n * 4])
@@ -247,6 +280,8 @@ class H(BaseHTTPRequestHandler):
                 if not p or not Path(p).is_dir():
                     return self.send_json({"files": [], "missing": True})
                 return self.send_json({"path": p, "files": list_folder(p)})
+            if u.path == "/api/dirs":
+                return self.send_json(list_dirs(q.get("p", [""])[0]))
             if u.path == "/api/job":
                 j = JOBS.get(q.get("id", [""])[0])
                 if not j:
@@ -339,11 +374,13 @@ class H(BaseHTTPRequestHandler):
             u = urllib.parse.urlparse(self.path)
             q = urllib.parse.parse_qs(u.query)
             if u.path == "/api/pick-folder":
+                body = self.body()
                 jid = uuid.uuid4().hex
                 JOBS[jid] = {"done": False}
                 def work():
                     try:
-                        p = os.environ.get("ST_FAKE_PICK") or dialog_folder()
+                        req = json.loads(body or b"{}")
+                        p = req.get("path") or os.environ.get("ST_FAKE_PICK") or dialog_folder()
                         if not p:
                             JOBS[jid].update(done=True, cancel=True); return
                         p = str(p).rstrip("/")
@@ -395,12 +432,16 @@ class H(BaseHTTPRequestHandler):
     def save_fcpxml(self, req):
         name = (req.get("name") or "セリフテイク").replace('"', "")
         where = req.get("dir") or str(Path.home() / "Movies")
-        path = os.environ.get("ST_FAKE_SAVE") or dialog_save(name, where)
-        if not path:
-            return {"cancel": True}
-        path = str(path)
-        if not path.lower().endswith(".fcpxml"):
-            path += ".fcpxml"
+        if os.environ.get("ST_FAKE_SAVE"):
+            path = os.environ["ST_FAKE_SAVE"]
+        else:
+            base = Path(where) if Path(where).is_dir() else Path.home() / "Movies"
+            safe = "".join(c if c not in '/\\:*?"<>|' else "_" for c in name)
+            path = base / (safe + ".fcpxml")
+            i = 2
+            while path.exists():
+                path = base / ("%s_%d.fcpxml" % (safe, i)); i += 1
+            path = str(path)
         Path(path).write_text(req.get("xml", ""), encoding="utf-8")
         opened = False
         if req.get("open") and not os.environ.get("ST_FAKE_SAVE"):
