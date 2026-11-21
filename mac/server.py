@@ -339,11 +339,21 @@ class H(BaseHTTPRequestHandler):
             u = urllib.parse.urlparse(self.path)
             q = urllib.parse.parse_qs(u.query)
             if u.path == "/api/pick-folder":
-                p = os.environ.get("ST_FAKE_PICK") or dialog_folder()
-                if not p:
-                    return self.send_json({"cancel": True})
-                p = p.rstrip("/")
-                return self.send_json({"path": p, "files": list_folder(p)})
+                jid = uuid.uuid4().hex
+                JOBS[jid] = {"done": False}
+                def work():
+                    try:
+                        p = os.environ.get("ST_FAKE_PICK") or dialog_folder()
+                        if not p:
+                            JOBS[jid].update(done=True, cancel=True); return
+                        p = str(p).rstrip("/")
+                        log("folder:", p)
+                        JOBS[jid].update(done=True, path=p, files=list_folder(p))
+                    except Exception as e:
+                        log(traceback.format_exc())
+                        JOBS[jid].update(done=True, error=str(e))
+                threading.Thread(target=work, daemon=True).start()
+                return self.send_json({"id": jid})
             if u.path == "/api/transcribe":
                 data = self.body()
                 jid = uuid.uuid4().hex
@@ -358,21 +368,16 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             if u.path == "/api/save-fcpxml":
                 req = json.loads(self.body() or b"{}")
-                name = (req.get("name") or "セリフテイク").replace('"', "")
-                where = req.get("dir") or str(Path.home() / "Movies")
-                if os.environ.get("ST_FAKE_SAVE"):
-                    path = os.environ["ST_FAKE_SAVE"]
-                else:
-                    path = dialog_save(name, where)
-                if not path:
-                    return self.send_json({"cancel": True})
-                if not path.lower().endswith(".fcpxml"):
-                    path += ".fcpxml"
-                Path(path).write_text(req.get("xml", ""), encoding="utf-8")
-                opened = False
-                if req.get("open") and not os.environ.get("ST_FAKE_SAVE"):
-                    opened = subprocess.run(["open", "-a", "Final Cut Pro", path]).returncode == 0
-                return self.send_json({"path": path, "opened": opened})
+                jid = uuid.uuid4().hex
+                JOBS[jid] = {"done": False}
+                def work():
+                    try:
+                        JOBS[jid].update(done=True, **self.save_fcpxml(req))
+                    except Exception as e:
+                        log(traceback.format_exc())
+                        JOBS[jid].update(done=True, error=str(e))
+                threading.Thread(target=work, daemon=True).start()
+                return self.send_json({"id": jid})
             if u.path == "/api/reveal":
                 req = json.loads(self.body() or b"{}")
                 subprocess.run(["open", "-R", req.get("path", "")])
@@ -386,6 +391,21 @@ class H(BaseHTTPRequestHandler):
                 self.send_json({"error": "server"}, 500)
             except Exception:
                 pass
+
+    def save_fcpxml(self, req):
+        name = (req.get("name") or "セリフテイク").replace('"', "")
+        where = req.get("dir") or str(Path.home() / "Movies")
+        path = os.environ.get("ST_FAKE_SAVE") or dialog_save(name, where)
+        if not path:
+            return {"cancel": True}
+        path = str(path)
+        if not path.lower().endswith(".fcpxml"):
+            path += ".fcpxml"
+        Path(path).write_text(req.get("xml", ""), encoding="utf-8")
+        opened = False
+        if req.get("open") and not os.environ.get("ST_FAKE_SAVE"):
+            opened = subprocess.run(["open", "-a", "Final Cut Pro", path]).returncode == 0
+        return {"path": path, "opened": opened}
 
 
 def serve():

@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.1.1';
+export const VERSION = '1.1.2';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -170,9 +170,22 @@ function setupDrop() {
 }
 function hasFiles(e) { return e.dataTransfer && [...e.dataTransfer.types].includes('Files'); }
 
+// 裏方の処理（ダイアログなど）が終わるまで待つ
+async function awaitJob(start) {
+  const s = await start;
+  if (!s || !s.id) return s;
+  for (;;) {
+    await sleep(400);
+    const j = await fetch('/api/job?id=' + s.id).then(r => r.json()).catch(() => null);
+    if (j && j.done) return j;
+    if (j && j.error && !j.done) return j;
+  }
+}
+
 async function pickFolder() {
   if (LOCAL) {
-    const r = await withBusy(() => fetch('/api/pick-folder', { method: 'POST' }).then(r => r.json()));
+    const r = await awaitJob(fetch('/api/pick-folder', { method: 'POST' }).then(r => r.json()));
+    if (r && r.error) { toast('フォルダを開けませんでした：' + r.error); return; }
     if (!r || r.cancel || !r.path) return;
     P.roots = [...new Set([...(P.roots || []), r.path])];
     await withBusy(() => registerFiles(r.files.map(f => ({ file: new RemoteFile(f), rel: f.rel }))));
@@ -1282,7 +1295,8 @@ function doExport() {
   const xml = buildFcpxml({ clips, media: P.media, basePath: s.basePath, projectName: P.name, eventName: P.name, keywordClips, audioPairs });
   if (LOCAL) {
     const dir = (P.roots && P.roots[0]) || '';
-    withBusy(() => fetch('/api/save-fcpxml', { method: 'POST', body: JSON.stringify({ name: P.name || 'セリフテイク', xml, dir, open: true }) }).then(r => r.json())).then(r => {
+    awaitJob(fetch('/api/save-fcpxml', { method: 'POST', body: JSON.stringify({ name: P.name || 'セリフテイク', xml, dir, open: true }) }).then(r => r.json())).then(r => {
+      if (r && r.error) { toast('保存できませんでした：' + r.error); return; }
       if (!r || r.cancel) return;
       closeSheet();
       toast(r.opened ? `書き出してFinal Cut Proで表示しました（${clips.length}カット）` : `書き出しました（${clips.length}カット）`);
