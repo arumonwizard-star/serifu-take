@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.0.1';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -34,7 +34,7 @@ function toast(msg) {
 }
 
 // ===== プロジェクト =====
-const DEFAULT_SETTINGS = { padPre: 0.5, padPost: 0.5, quality: 'high', basePath: '', joinTakes: true, unselected: 'auto', extAudio: true, keywords: true };
+const DEFAULT_SETTINGS = { qv: 2, padPre: 0.5, padPost: 0.5, quality: 'std', basePath: '', joinTakes: true, unselected: 'auto', extAudio: true, keywords: true };
 function newProject() {
   return {
     v: 1, name: '新規プロジェクト', scriptText: '', scenes: [], cutsByText: {},
@@ -299,12 +299,23 @@ async function stepGroups() {
 let worker = null, jobId = 0;
 const jobs = new Map();
 let workerQuality = null;
+let lastWorkerMsg = 0;
+// 取り込みや処理が止まったら作り直す
+setInterval(() => {
+  if (!worker || !jobs.size) return;
+  if (Date.now() - lastWorkerMsg > 180000) {
+    worker.terminate(); worker = null;
+    for (const j of jobs.values()) j.rej(new Error('stall'));
+    jobs.clear();
+  }
+}, 5000);
 function getWorker() {
   if (worker) return worker;
   worker = new Worker(new URL('./asr-worker.js', import.meta.url), { type: 'module' });
   worker.onmessage = (ev) => {
     const m = ev.data;
-    if (m.type === 'model-progress') { setStatus(`AIモデル読込 ${Math.round(m.loaded / m.total * 100)}%`); return; }
+    lastWorkerMsg = Date.now();
+    if (m.type === 'model-progress') { if (!m.total) return; setStatus(`AIモデル読込 ${Math.round(m.loaded / 1048576)}/${Math.round(m.total / 1048576)}MB`); return; }
     if (m.type === 'model-ready') { workerQuality = m.model; return; }
     const j = jobs.get(m.id);
     if (!j) return;
@@ -320,6 +331,7 @@ function transcribe(pcm, regions, quality, onProgress) {
   const id = ++jobId;
   return new Promise((res, rej) => {
     jobs.set(id, { res, rej, onProgress });
+    lastWorkerMsg = Date.now();
     w.postMessage({ type: 'transcribe', id, pcm, regions, quality }, [pcm.buffer]);
   });
 }
@@ -334,7 +346,7 @@ async function stepAsr() {
     const regions = asrBlocks(m.speech.regions);
     if (!regions.length) { P.transcripts[g.rep] = []; continue; }
     let quality = P.settings.quality;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const f = files.get(g.rep);
         const { pcm, offset } = await audio16k(f, await probe(f));
@@ -347,7 +359,7 @@ async function stepAsr() {
         break;
       } catch (e) {
         console.warn(e);
-        if (attempt === 0 && quality === 'high') { quality = 'std'; worker && worker.terminate(); worker = null; continue; }
+        if (attempt < 2) { if (quality === 'high') quality = 'std'; worker && worker.terminate(); worker = null; setStatus('AIモデル再接続'); continue; }
         m.asrError = String(e.message || e);
         break;
       }
@@ -1261,6 +1273,7 @@ async function boot() {
     if (saved && saved.v === 1) {
       P = Object.assign(newProject(), saved);
       P.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
+      if (P.settings.qv !== 2) { P.settings.quality = 'std'; P.settings.qv = 2; }
       P.user = Object.assign({ status: {}, overrides: {}, adjust: {}, cameraNames: {} }, saved.user || {});
     }
     $('#projName').value = P.name;

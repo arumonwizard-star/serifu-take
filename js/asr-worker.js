@@ -28,11 +28,11 @@ async function load(quality) {
   const model = MODELS[q] || MODELS.std;
   const files = new Map();
   const progress_callback = (p) => {
-    if (p.status === 'progress' && p.total) {
-      files.set(p.file, [p.loaded, p.total]);
+    if ((p.status === 'progress' || p.status === 'download') && p.total) {
+      files.set(p.file, [p.loaded || 0, p.total]);
       let l = 0, t = 0; for (const [a, b] of files.values()) { l += a; t += b; }
       postMessage({ type: 'model-progress', loaded: l, total: t });
-    }
+    } else postMessage({ type: 'model-progress', loaded: 0, total: 0, status: p.status });
   };
   let dtype, device;
   if (webgpu) {
