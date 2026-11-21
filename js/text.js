@@ -155,7 +155,12 @@ function readingLen(rd, a, b) {
   return n;
 }
 
-export function autoCuts(text, opt = {}) {
+// 句読点・記号の位置だけで区切る（区切りが無いセリフは1ブロック）
+export function autoCuts(text) {
+  return boundaryCandidates(text).strong;
+}
+
+export function autoCutsByLength(text, opt = {}) {
   const maxLen = opt.maxLen || 14;
   const { strong, weak, reading } = boundaryCandidates(text);
   const cuts = new Set(strong);

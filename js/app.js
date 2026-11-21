@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.0.3';
+export const VERSION = '1.0.4';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -373,7 +373,6 @@ function reorganize() {
   if (!P.scenes.length) { P.runs = []; P.freeAdlibs = []; D = derive(P, { speechOf }); return; }
   const { runs, freeAdlibs } = buildRuns(P.scenes, P.groups, P.transcripts, speechOf);
   P.runs = runs; P.freeAdlibs = freeAdlibs;
-  refineCuts();
   D = derive(P, { speechOf });
   save();
 }
@@ -991,7 +990,6 @@ async function handleAct(act, el) {
   if (act === 'cutauto') {
     const ln = findLine(el.dataset.line);
     ln.cuts = autoCuts(ln.text); ln.userCuts = false; delete P.cutsByText[ln.text];
-    refineCuts();
     D = derive(P, { speechOf }); save(); renderTree();
   }
 }
@@ -1285,7 +1283,10 @@ async function boot() {
     $('#projName').value = P.name;
     render();
     await ensureTokenizer();
-    if (P.scenes.length) { clearReadingCache(); D = derive(P, { speechOf }); render(); }
+    if (P.scenes.length) {
+      if (P.settings.cutv !== 2) { for (const sc of P.scenes) for (const ln of sc.lines) if (!ln.userCuts) ln.cuts = autoCuts(ln.text); P.settings.cutv = 2; save(); }
+      clearReadingCache(); D = derive(P, { speechOf }); render();
+    }
     if (window.showDirectoryPicker) await restoreHandles(false);
     render();
     if (needsAnalysis() || P.groups.some(g => !P.transcripts[g.rep] && files.has(g.rep))) runPipeline();
