@@ -1,5 +1,7 @@
 # セリフテイク
 
+Mac版（推奨）：`~/Applications/セリフテイク.app`。裏方 `mac/server.py` が画面を配信し、文字起こしは whisper.cpp（`whisper-cli`、モデル `~/.local/share/whisper-cpp/ggml-large-v3-turbo-q5_0.bin`）で端末内処理。素材フォルダは Finder のダイアログで選ぶ。ログは `~/Library/Logs/SerifuTake.log`、保存データは `~/Library/Application Support/SerifuTake/`。
+
 ショートドラマの撮影素材を台本のセリフ単位に整理し、Final Cut Pro 用の FCPXML を書き出すアプリ。
 ブラウザ（Mac の Safari / Chrome）で動き、動画・音声・台本は端末の中だけで処理する。
 
@@ -26,7 +28,17 @@ python3 tests/e2e.py            # 文字起こしは模擬。解析・同期・�
 xmllint --noout tests/out.fcpxml
 ```
 
+## Mac版のテスト
+```
+python3 tools/build_mac.py      # dist/セリフテイク.app と mac/manifest.json を作る
+python3 tests/e2e_mac.py        # 裏方を起動し、whisper の代わり（tests/fake_whisper.py）で一通り確認
+```
+
 ## 反映
 `main` に push すると GitHub Pages に自動反映される。
 版を上げるときは `js/app.js` の `VERSION` と `version.json` を同じ番号にする（開いている画面が自動で入れ替わる）。
 `vendor/` を差し替えたときは `sw.js` の `CACHE` の名前も変える。
+
+Mac版の自動更新：アプリは起動時と30分ごとに GitHub の `mac/manifest.json` を見て、変わったファイルだけ取り込む。
+画面や server.py を変えたら、必ず `python3 tools/build_mac.py` で manifest を作り直してから push する。
+起動部分（`mac/app/SerifuTake`、`Info.plist`）は自動更新されないので、変えたときは Mac の `~/Applications/セリフテイク.app` にも直接入れる。

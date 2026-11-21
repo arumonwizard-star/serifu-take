@@ -85,7 +85,7 @@ export function buildFcpxml(opt) {
   for (const f of formats.values()) res.push(`    <format id="${f.id}" frameDuration="${f.r.num}/${f.r.den}s" width="${f.w}" height="${f.h}"/>`);
   for (const a of assets.values()) {
     const info = a.info;
-    const url = fileUrl(basePath, a.md.rel || a.md.name);
+    const url = a.md.abs ? 'file://' + a.md.abs.split('/').map(p => encodeURIComponent(p)).join('/') : fileUrl(basePath, a.md.rel || a.md.name);
     if (a.audio) {
       res.push(`    <asset id="${a.id}" name="${esc(a.md.name)}" start="${assetTime(a, 0)}" duration="${assetDur(a, info.duration || 0)}" hasAudio="1" audioSources="1" audioChannels="${info.audioChannels || 2}" audioRate="${info.audioRate || 48000}">\n      <media-rep kind="original-media" src="${esc(url)}"/>\n    </asset>`);
     } else {

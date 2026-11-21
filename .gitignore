@@ -2,3 +2,5 @@ tests/media/
 tests/*.png
 tests/out.fcpxml
 .DS_Store
+dist/
+tests/out_mac.fcpxml

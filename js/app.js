@@ -5,12 +5,32 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.0.5';
+export const VERSION = '1.1.0';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const zen2han = (s) => String(s).replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[。]/g, '.');
+
+// ===== Mac版（裏方あり）か =====
+let LOCAL = null;
+class RemoteFile {
+  constructor(f) { this.name = f.name; this.size = f.size; this.lastModified = f.mtime; this.abs = f.abs; }
+  slice(a, b) {
+    const abs = this.abs, size = this.size;
+    const end = Math.min(b == null ? size : b, size);
+    return {
+      arrayBuffer: async () => {
+        if (end <= a) return new ArrayBuffer(0);
+        const r = await fetch('/media?p=' + encodeURIComponent(abs), { headers: { Range: `bytes=${a}-${end - 1}` } });
+        if (!r.ok) throw new Error('素材を読めません');
+        return r.arrayBuffer();
+      },
+    };
+  }
+  async text() { const r = await fetch('/media?p=' + encodeURIComponent(this.abs)); return r.text(); }
+  async arrayBuffer() { return this.slice(0, this.size).arrayBuffer(); }
+}
 
 // ===== 読み込み中表示 =====
 let busyN = 0, busyT = null;
@@ -51,7 +71,10 @@ let sel = { kind: null, key: null, item: null, cam: null };
 let saveT = null;
 function save() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => store.put('kv', 'project', P).catch(e => console.warn(e)), 400);
+  saveT = setTimeout(() => {
+    store.put('kv', 'project', P).catch(e => console.warn(e));
+    if (LOCAL) fetch('/api/project', { method: 'POST', body: JSON.stringify(P) }).catch(() => { });
+  }, 400);
 }
 const speechOf = (key) => P.media[key] && P.media[key].speech;
 
@@ -70,6 +93,7 @@ async function registerFiles(list) {
     files.set(k, file);
     if (!P.media[k]) { P.media[k] = { key: k, name: n, rel: rel || n, size: file.size }; added++; }
     else if (rel && P.media[k].rel !== rel) P.media[k].rel = rel;
+    if (file.abs) P.media[k].abs = file.abs;
   }
   if (script) {
     const text = await script.text();
@@ -122,6 +146,14 @@ function setupDrop() {
   window.addEventListener('drop', async (e) => {
     if (!hasFiles(e)) return;
     e.preventDefault(); depth = 0; $('#drop').classList.remove('on');
+    if (LOCAL) {
+      // 台本ファイルだけはそのまま読む。素材はフォルダ選択で場所を取得する
+      const fl = [...e.dataTransfer.files];
+      const sc = fl.find(f => isScriptName(f.name));
+      if (sc && fl.length === 1) { await withBusy(async () => { await applyScript(await sc.text()); render(); }); toast('台本を読み込みました：' + sc.name); return; }
+      pickFolder();
+      return;
+    }
     const items = [...e.dataTransfer.items].filter(i => i.kind === 'file');
     const handleProms = items.map(i => i.getAsFileSystemHandle ? i.getAsFileSystemHandle().catch(() => null) : null);
     const entries = items.map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null);
@@ -139,6 +171,13 @@ function setupDrop() {
 function hasFiles(e) { return e.dataTransfer && [...e.dataTransfer.types].includes('Files'); }
 
 async function pickFolder() {
+  if (LOCAL) {
+    const r = await withBusy(() => fetch('/api/pick-folder', { method: 'POST' }).then(r => r.json()));
+    if (!r || r.cancel || !r.path) return;
+    P.roots = [...new Set([...(P.roots || []), r.path])];
+    await withBusy(() => registerFiles(r.files.map(f => ({ file: new RemoteFile(f), rel: f.rel }))));
+    return;
+  }
   if (window.showDirectoryPicker) {
     try {
       const h = await window.showDirectoryPicker({ id: 'serifu-take', mode: 'read' });
@@ -149,6 +188,15 @@ async function pickFolder() {
       });
     } catch (e) { if (e.name !== 'AbortError') toast('フォルダを開けませんでした'); }
   } else $('#fileInput').click();
+}
+
+async function restoreLocal() {
+  const out = [];
+  for (const root of P.roots || []) {
+    const r = await fetch('/api/list?p=' + encodeURIComponent(root)).then(r => r.json()).catch(() => null);
+    if (r && r.files) for (const f of r.files) out.push({ file: new RemoteFile(f), rel: f.rel });
+  }
+  if (out.length) await registerFiles(out);
 }
 
 async function restoreHandles(ask) {
@@ -273,7 +321,7 @@ async function stepGroups() {
   const arr = [];
   for (const m of list) {
     const env = await store.get('env', m.key);
-    if (!env) continue;
+    if (!env) { if (files.has(m.key)) { delete m.speech; rerun = true; } continue; }
     // 時刻を素材の時刻にそろえるため、先頭の補正分だけずらす
     let feat = syncFeature(env.db);
     const off = Math.round((env.offset || 0) / HOP);
@@ -336,6 +384,29 @@ function transcribe(pcm, regions, quality, onProgress) {
   });
 }
 
+async function transcribeLocal(pcm, onProgress) {
+  const r = await fetch('/api/transcribe', { method: 'POST', body: pcm.buffer }).then(r => r.json());
+  if (!r.id) throw new Error('文字起こしを開始できません');
+  for (;;) {
+    await sleep(1000);
+    const j = await fetch('/api/job?id=' + r.id).then(r => r.json());
+    if (j.error) throw new Error(j.error);
+    onProgress && onProgress(Math.round((j.progress || 0) * 100), 100);
+    if (j.done) return j.segments || [];
+  }
+}
+
+// 声の無いところの文字起こし（聞き違いの作文）を除く
+function keepVoiced(segs, voiced, offset) {
+  return segs.filter(s => {
+    const a = s.start + offset, b = s.end + offset;
+    const d = Math.max(0.05, b - a);
+    let ov = 0;
+    for (const v of voiced) ov += Math.max(0, Math.min(b, v[1]) - Math.max(a, v[0]));
+    return ov / d >= 0.2;
+  });
+}
+
 async function stepAsr() {
   const todo = P.groups.filter(g => !P.transcripts[g.rep] && files.has(g.rep) && P.media[g.rep].speech);
   let i = 0;
@@ -353,7 +424,10 @@ async function stepAsr() {
         // ワーカーへは素材時刻でなく pcm 時刻で渡す
         const rr = regions.map(r => [r[0] - offset, r[1] - offset]);
         const prog = (d, t) => setStatus(`文字起こし ${i}/${todo.length}・${Math.round(d / t * 100)}%`);
-        const segs = window.__stMockAsr ? await window.__stMockAsr(g.rep, rr, pcm) : await transcribe(pcm, rr, quality, prog);
+        let segs = window.__stMockAsr ? await window.__stMockAsr(g.rep, rr, pcm)
+          : (LOCAL && LOCAL.whisper && LOCAL.model) ? await transcribeLocal(pcm, prog)
+          : await transcribe(pcm, rr, quality, prog);
+        segs = keepVoiced(segs, m.speech.voiced, offset);
         P.transcripts[g.rep] = segs.map(s => ({ ...s, start: s.start + offset, end: s.end + offset }));
         P.transcriptModel[g.rep] = quality;
         break;
@@ -641,7 +715,7 @@ function urlOf(fk) {
   if (urls.has(fk)) return urls.get(fk);
   const f = files.get(fk);
   if (!f) return null;
-  const u = URL.createObjectURL(f);
+  const u = f instanceof RemoteFile ? new URL('/media?p=' + encodeURIComponent(f.abs), location.href).href : URL.createObjectURL(f);
   urls.set(fk, u);
   return u;
 }
@@ -973,7 +1047,7 @@ function setupEvents() {
 
 async function handleAct(act, el) {
   if (act === 'pick' || act === 'reconnect') {
-    if (act === 'reconnect' && window.showDirectoryPicker) {
+    if (act === 'reconnect' && !LOCAL && window.showDirectoryPicker) {
       const need = await withBusy(() => restoreHandles(true));
       if (missingCount()) pickFolder();
       return;
@@ -1078,12 +1152,11 @@ function openSettings() {
   openSheet(`<h2>設定<span class="sp"></span><button id="stClose">閉じる</button></h2>
     <div class="frow"><label>セリフ前の余白</label>${numInput('padPre', s.padPre, 0, 3)}<span>秒</span></div>
     <div class="frow"><label>セリフ後の余白</label>${numInput('padPost', s.padPost, 0, 3)}<span>秒</span></div>
-    <div class="frow"><label>文字起こしの精度</label><select id="quality"><option value="high">高精度</option><option value="std">標準</option><option value="light">軽量</option></select></div>
+    ${LOCAL && LOCAL.whisper ? '' : `<div class="frow"><label>文字起こしの精度</label><select id="quality"><option value="high">高精度</option><option value="std">標準</option><option value="light">軽量</option></select></div>`}
     <div class="frow"><label>文字起こし</label><button id="reAsr">文字起こし再実行</button></div>
     <div class="frow"><label>プロジェクト</label><button id="reset">プロジェクト初期化</button></div>
     <div class="frow"><label>操作キー</label><span style="color:var(--fg2)">Space 再生・↑↓ セリフ・←→ テイク・1 ○・2 △・3 ×・0 未選択・I 開始位置・O 終了位置・C 連続再生</span></div>`);
-  $('#quality').value = s.quality;
-  $('#quality').onchange = (e) => { s.quality = e.target.value; save(); };
+  if ($('#quality')) { $('#quality').value = s.quality; $('#quality').onchange = (e) => { s.quality = e.target.value; save(); }; }
   bindNum('padPre', (v) => { s.padPre = v; save(); });
   bindNum('padPost', (v) => { s.padPost = v; save(); });
   $('#stClose').onclick = closeSheet;
@@ -1143,7 +1216,7 @@ function openExport() {
   const hasAudio = Object.values(P.media).some(m => m.info && m.info.kind === 'audio');
   openSheet(`<h2>FCPXML書き出し<span class="sp"></span><button id="exClose">閉じる</button></h2>
     <div class="frow"><label>セリフ</label><span>${total}・採用済み ${chosen}</span></div>
-    <div class="frow"><label>素材フォルダの場所</label><input type="text" id="basePath" value="${esc(s.basePath)}" placeholder="Finderで素材フォルダを選んで ⌥⌘C → ここに貼り付け" spellcheck="false"></div>
+    ${LOCAL ? '' : `<div class="frow"><label>素材フォルダの場所</label><input type="text" id="basePath" value="${esc(s.basePath)}" placeholder="Finderで素材フォルダを選んで ⌥⌘C → ここに貼り付け" spellcheck="false"></div>`}
     <div class="frow"><label>未選択のセリフ</label><select id="unsel"><option value="auto">自動候補</option><option value="none">除外</option></select></div>
     <div class="frow"><label>同じテイクの連続</label><select id="join"><option value="1">間ごと結合</option><option value="0">セリフごと分割</option></select></div>
     ${hasAudio ? `<div class="frow"><label>外部音声</label><select id="ext"><option value="1">下に配置</option><option value="0">配置なし</option></select></div>` : ''}
@@ -1153,21 +1226,23 @@ function openExport() {
   if ($('#ext')) $('#ext').value = s.extAudio ? '1' : '0';
   const bp = $('#basePath');
   const cleanPath = (v) => v.trim().replace(/^['"]|['"]$/g, '').replace(/\\ /g, ' ').replace(/^file:\/\//, '').replace(/\/+$/, '');
-  bp.addEventListener('change', () => { bp.value = cleanPath(bp.value); s.basePath = bp.value; save(); });
-  bp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) bp.blur(); });
+  if (bp) {
+    bp.addEventListener('change', () => { bp.value = cleanPath(bp.value); s.basePath = bp.value; save(); });
+    bp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) bp.blur(); });
+  }
   $('#unsel').onchange = (e) => { s.unselected = e.target.value; save(); };
   $('#join').onchange = (e) => { s.joinTakes = e.target.value === '1'; save(); };
   $('#kw').onchange = (e) => { s.keywords = e.target.value === '1'; save(); };
   if ($('#ext')) $('#ext').onchange = (e) => { s.extAudio = e.target.value === '1'; save(); };
   $('#exClose').onclick = closeSheet;
-  $('#exGo').onclick = () => { bp.value = cleanPath(bp.value); s.basePath = bp.value; save(); doExport(); };
+  $('#exGo').onclick = () => { if (bp) { bp.value = cleanPath(bp.value); s.basePath = bp.value; } save(); doExport(); };
 }
 
 function doExport() {
   const s = P.settings;
   const selList = buildSelection();
   if (!selList.length) { toast('書き出すセリフがありません'); return; }
-  if (!s.basePath || !s.basePath.startsWith('/')) { toast('素材フォルダの場所を貼り付けてください'); $('#basePath').focus(); return; }
+  if (!LOCAL && (!s.basePath || !s.basePath.startsWith('/'))) { toast('素材フォルダの場所を貼り付けてください'); $('#basePath').focus(); return; }
   // 同じテイク・同じ素材が続く場合は結合
   const segs = [];
   for (const x of selList) {
@@ -1205,6 +1280,15 @@ function doExport() {
     for (const a of D.adlibs) for (const c of a.cams) keywordClips.push({ fileKey: c.fileKey, in: c.in, out: c.out, keyword: 'アドリブ' });
   }
   const xml = buildFcpxml({ clips, media: P.media, basePath: s.basePath, projectName: P.name, eventName: P.name, keywordClips, audioPairs });
+  if (LOCAL) {
+    const dir = (P.roots && P.roots[0]) || '';
+    withBusy(() => fetch('/api/save-fcpxml', { method: 'POST', body: JSON.stringify({ name: P.name || 'セリフテイク', xml, dir, open: true }) }).then(r => r.json())).then(r => {
+      if (!r || r.cancel) return;
+      closeSheet();
+      toast(r.opened ? `書き出してFinal Cut Proで表示しました（${clips.length}カット）` : `書き出しました（${clips.length}カット）`);
+    });
+    return;
+  }
   const blob = new Blob([xml], { type: 'application/xml' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1246,14 +1330,14 @@ function setupSplitters() {
 
 // ===== 自動更新 =====
 function setupUpdate() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register(BASE + 'sw.js').catch(() => { });
+  if ('serviceWorker' in navigator && !LOCAL) navigator.serviceWorker.register(BASE + 'sw.js').catch(() => { });
   const check = async () => {
     try {
       const r = await fetch(BASE + 'version.json?' + Date.now(), { cache: 'no-store' });
       const j = await r.json();
       if (j.version && j.version !== VERSION) {
         // 作業を邪魔しない時だけ入れ替え
-        if (video.paused && !running && !$('#sheet').classList.contains('on') && (files.size === 0 || window.showDirectoryPicker)) location.reload();
+        if (video.paused && !running && !$('#sheet').classList.contains('on') && (LOCAL || files.size === 0 || window.showDirectoryPicker)) location.reload();
       }
     } catch (e) { }
   };
@@ -1264,7 +1348,7 @@ function setupUpdate() {
 // ===== 起動 =====
 async function boot() {
   $('#ver').textContent = 'v' + VERSION;
-  setupEvents(); setupDrop(); setupSplitters(); setupRangeDrag(); setupUpdate();
+  setupEvents(); setupDrop(); setupSplitters(); setupRangeDrag();
   $('#scriptInput').onchange = async (e) => {
     const f = e.target.files[0]; e.target.value = '';
     if (!f) return;
@@ -1274,7 +1358,11 @@ async function boot() {
   };
   busy(true);
   try {
-    const saved = await store.get('kv', 'project');
+    LOCAL = await fetch(BASE + 'api/ping', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (LOCAL) document.documentElement.classList.add('local');
+    setupUpdate();
+    let saved = LOCAL ? await fetch('/api/project').then(r => r.json()).catch(() => null) : null;
+    if (!saved) saved = await store.get('kv', 'project');
     if (saved && saved.v === 1) {
       P = Object.assign(newProject(), saved);
       P.settings = { ...DEFAULT_SETTINGS, ...(saved.settings || {}) };
@@ -1288,7 +1376,8 @@ async function boot() {
       if (P.settings.cutv !== 2) { for (const sc of P.scenes) for (const ln of sc.lines) if (!ln.userCuts) ln.cuts = autoCuts(ln.text); P.settings.cutv = 2; save(); }
       clearReadingCache(); D = derive(P, { speechOf }); render();
     }
-    if (window.showDirectoryPicker) await restoreHandles(false);
+    if (LOCAL) await restoreLocal();
+    else if (window.showDirectoryPicker) await restoreHandles(false);
     render();
     if (needsAnalysis() || P.groups.some(g => !P.transcripts[g.rep] && files.has(g.rep))) runPipeline();
   } finally { busy(false); }

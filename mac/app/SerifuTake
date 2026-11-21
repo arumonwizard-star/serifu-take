@@ -1,0 +1,40 @@
+#!/bin/bash
+# セリフテイク.app の起動部分。裏方（server.py）を専用ウインドウ付きで動かす。
+RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+LOG="$HOME/Library/Logs/SerifuTake.log"
+SUP="$HOME/Library/Application Support/SerifuTake"
+mkdir -p "$HOME/Library/Logs" "$SUP"
+# ログは大きくなりすぎないように
+[ -f "$LOG" ] && [ "$(stat -f%z "$LOG" 2>/dev/null || echo 0)" -gt 2000000 ] && mv -f "$LOG" "$LOG.1"
+echo "=== $(date) 起動 ===" >>"$LOG"
+
+# 使う python（専用ウインドウの部品 pywebview が入っているものを優先。CH Cut の環境も使える）
+PY=""
+for c in "$SUP/venv/bin/python3" "$HOME/Library/Application Support/CHCut/venv/bin/python3" /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
+  if [ -x "$c" ] && "$c" -c "import webview" 2>/dev/null; then PY="$c"; break; fi
+done
+if [ -z "$PY" ]; then
+  SYS=""
+  for c in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do [ -x "$c" ] && { SYS="$c"; break; }; done
+  NOWV="$SUP/no_webview"
+  if [ -n "$SYS" ] && [ ! -f "$NOWV" ]; then
+    PINS="pyobjc-core<12 pyobjc-framework-Cocoa<12 pyobjc-framework-WebKit<12 pyobjc-framework-Quartz<12 pyobjc-framework-Security<12 pyobjc-framework-UniformTypeIdentifiers<12"
+    if "$SYS" -m venv "$SUP/venv" >>"$LOG" 2>&1 && "$SUP/venv/bin/python3" -m pip install --prefer-binary pywebview $PINS >>"$LOG" 2>&1; then
+      PY="$SUP/venv/bin/python3"
+    else
+      echo "pywebview を入れられませんでした（ブラウザで開きます）" >>"$LOG"; touch "$NOWV"
+    fi
+  fi
+  [ -z "$PY" ] && PY="$SYS"
+fi
+if [ -z "$PY" ]; then
+  osascript -e 'display dialog "python3 が見つかりません" buttons {"OK"} with title "セリフテイク"' >/dev/null 2>&1
+  exit 1
+fi
+echo "python: $PY" >>"$LOG"
+# 前回の残りが動いていれば終了させる
+OLD=$(lsof -ti tcp:8790 -sTCP:LISTEN 2>/dev/null)
+if [ -n "$OLD" ]; then kill $OLD 2>/dev/null; for i in 1 2 3 4 5 6 7 8 9 10; do lsof -ti tcp:8790 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 0.3; done; fi
+cd "$RES" || exit 1
+exec "$PY" server.py >>"$LOG" 2>&1
