@@ -86,10 +86,13 @@ export function parseScript(text) {
   const newScene = (name) => { scene = { id: 'S' + (scenes.length + 1), name: name || ('Scene ' + (scenes.length + 1)), lines: [] }; scenes.push(scene); pendingRole = null; lastRole = null; };
   const addLine = (role, t) => {
     t = t.trim().replace(/^[「『]/, '').replace(/[」』]$/, '').trim();
-    if (!t) return;
+    const raw = t;
+    // （ ）内はト書きなので、セリフからは除く
+    t = t.replace(/[（(][^）)]*[）)]/g, '').replace(/[（(][^）)]*$/, '').replace(/\s{2,}/g, ' ').trim();
+    if (!t.replace(/[、。！？!?…\s]/g, '')) return;
     if (!scene) newScene();
     n++;
-    scene.lines.push({ id: scene.id + 'L' + (scene.lines.length + 1), role: role || '?', text: t });
+    scene.lines.push({ id: scene.id + 'L' + (scene.lines.length + 1), role: role || '?', text: t, raw });
     lastRole = role;
   };
   for (const raw of lines) {
@@ -153,7 +156,7 @@ function readingLen(rd, a, b) {
 }
 
 export function autoCuts(text, opt = {}) {
-  const maxLen = opt.maxLen || 10;
+  const maxLen = opt.maxLen || 14;
   const { strong, weak, reading } = boundaryCandidates(text);
   const cuts = new Set(strong);
   const sorted = () => [0, ...[...cuts].sort((a, b) => a - b), text.length];
@@ -170,7 +173,7 @@ export function autoCuts(text, opt = {}) {
       for (const c of weak) {
         if (c <= a || c >= e) continue;
         const l = readingLen(reading, a, c), r = readingLen(reading, c, e);
-        if (l < 3 || r < 3) continue;
+        if (l < 5 || r < 5) continue;
         const d = Math.abs(l - r);
         if (d < bd) { bd = d; best = c; }
       }
