@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>セリフテイク</title>
+<meta name="theme-color" content="#121418">
+<meta name="apple-mobile-web-app-title" content="セリフテイク">
+<meta name="application-name" content="セリフテイク">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="loadbar"><i></i></div>
+<div id="loading"><span class="spin"></span>読み込み中</div>
+
+<header>
+  <div class="brand"><img src="icons/icon.svg" alt=""><span>セリフテイク</span></div>
+  <input id="projName" class="projname" spellcheck="false">
+  <div class="search"><input id="search" type="search" placeholder="検索" spellcheck="false"></div>
+  <div class="hbtns">
+    <button id="bAdd">素材追加</button>
+    <button id="bScript">台本</button>
+    <button id="bMedia">素材一覧</button>
+    <button id="bSettings">設定</button>
+    <button id="bExport" class="primary">FCPXML書き出し</button>
+  </div>
+  <div id="status" class="status"></div>
+</header>
+
+<main id="main">
+  <section id="left">
+    <div id="tree"></div>
+  </section>
+  <div class="vsplit" id="vsplit"></div>
+  <section id="right">
+    <div id="previewWrap">
+      <div id="preview">
+        <video id="video" playsinline preload="auto"></video>
+        <div id="pvInfo"></div>
+        <div id="pvEmpty"></div>
+      </div>
+      <div id="range">
+        <div class="rtrack" id="rtrack">
+          <div class="rwave" id="rwave"></div>
+          <div class="rsel" id="rsel"><b class="h l" data-h="0"></b><b class="h r" data-h="1"></b></div>
+          <div class="rhead" id="rhead"></div>
+        </div>
+      </div>
+      <div id="pvCtl">
+        <button id="bPlay">再生</button>
+        <button id="bSeq">連続再生</button>
+        <button id="bCamCmp">カメラ比較</button>
+        <span class="sep"></span>
+        <button id="bIn">開始位置</button>
+        <button id="bOut">終了位置</button>
+        <button id="bResetRange">範囲リセット</button>
+        <span id="pvTime" class="time"></span>
+      </div>
+    </div>
+    <div class="hsplit" id="hsplit"></div>
+    <div id="takes"></div>
+  </section>
+</main>
+
+<div id="drop"><div>ドロップで追加</div></div>
+
+<div id="sheet" class="sheet"><div class="sheetIn" id="sheetIn"></div></div>
+<div id="toast"></div>
+<div id="ver"></div>
+
+<input id="fileInput" type="file" multiple webkitdirectory hidden>
+<input id="scriptInput" type="file" accept=".txt,.md,.fountain,text/plain" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

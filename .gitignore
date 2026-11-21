@@ -1,0 +1,4 @@
+tests/media/
+tests/*.png
+tests/out.fcpxml
+.DS_Store
