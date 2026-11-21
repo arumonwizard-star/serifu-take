@@ -173,3 +173,4 @@ table.media input { width: 110px; padding: 2px 6px; }
 .perm .pt { font-weight: 700; color: #f3dd9a; margin-bottom: 6px; }
 .perm ol { margin: 6px 0 12px; padding-left: 20px; line-height: 1.9; }
 .perm .row { display: flex; gap: 8px; }
+.perm .diag { margin-top: 10px; font-size: 10px; color: var(--fg3); word-break: break-all; font-family: ui-monospace, Menlo, monospace; }

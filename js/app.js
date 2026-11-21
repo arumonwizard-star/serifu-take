@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.2';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -192,10 +192,11 @@ function browseFolder() {
       openSheet(`<h2>素材フォルダ選択<span class="sp"></span><button id="fbCancel">キャンセル</button><button id="fbOk" class="primary">このフォルダを選択</button></h2>
         <div class="fb"><div class="fbPlaces">${d.places.map(x => `<div class="fbPlace${cur === x.path || cur.startsWith(x.path + '/') && x.path !== d.places[0].path ? ' on' : ''}" data-p="${esc(x.path)}">${esc(x.name)}</div>`).join('')}</div>
         <div class="fbMain"><div class="fbPath">${d.parent ? `<button data-p="${esc(d.parent)}">上へ</button>` : ''}<span>${esc(d.path)}</span><span class="fbCnt">素材 ${d.media}</span></div>
-        <div class="fbList">${d.error ? (/not permitted/i.test(d.error) ? `<div class="perm"><div class="pt">Macの許可が必要です</div><ol><li>「再起動」を押す</li><li>「セリフテイクがリムーバブルボリューム上のファイルにアクセスしようとしています」と出たら「許可」を押す</li><li>出ないときは「許可の設定を表示」→「フルディスクアクセス」で「セリフテイク」をオン</li></ol><div class="row"><button id="fbRelaunch" class="primary">再起動</button><button id="fbPerm">許可の設定を表示</button></div></div>` : `<div class="empty">開けません：${esc(d.error)}</div>`) : ''}${d.dirs.map(n => `<div class="fbDir" data-p="${esc(d.path.replace(/\/$/, '') + '/' + n)}">${esc(n)}</div>`).join('') || (d.error ? '' : '<div class="empty">フォルダなし</div>')}</div></div></div>`);
+        <div class="fbList">${d.error ? (/not permitted/i.test(d.error) ? `<div class="perm"><div class="pt">Macの許可が必要です</div><ol><li>「再起動」を押す</li><li>「セリフテイクがリムーバブルボリューム上のファイルにアクセスしようとしています」と出たら「許可」を押す</li><li>出ないときは「許可の設定を表示」→「フルディスクアクセス」で「セリフテイク」をオン</li></ol><div class="row"><button id="fbRelaunch" class="primary">再起動</button><button id="fbPerm">許可の設定を表示</button></div><div class="diag" id="fbDiag"></div></div>` : `<div class="empty">開けません：${esc(d.error)}</div>`) : ''}${d.dirs.map(n => `<div class="fbDir" data-p="${esc(d.path.replace(/\/$/, '') + '/' + n)}">${esc(n)}</div>`).join('') || (d.error ? '' : '<div class="empty">フォルダなし</div>')}</div></div></div>`);
       $('#fbCancel').onclick = () => { closeSheet(); resolve(null); };
       $('#fbOk').onclick = () => { localStorage.setItem('st-lastdir', cur); closeSheet(); resolve(cur); };
       $('#sheetIn').querySelectorAll('[data-p]').forEach(n => n.onclick = () => draw(n.dataset.p));
+      if ($('#fbDiag')) fetch('/api/diag').then(r => r.json()).then(j => { $('#fbDiag').textContent = JSON.stringify(j); }).catch(() => { });
       if ($('#fbPerm')) $('#fbPerm').onclick = () => fetch('/api/open-privacy', { method: 'POST' });
       if ($('#fbRelaunch')) $('#fbRelaunch').onclick = () => { localStorage.setItem('st-lastdir', cur); fetch('/api/relaunch', { method: 'POST' }); };
     };

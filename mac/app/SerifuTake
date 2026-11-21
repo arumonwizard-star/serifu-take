@@ -61,4 +61,5 @@ OLD=$(lsof -ti tcp:8790 -sTCP:LISTEN 2>/dev/null)
 if [ -n "$OLD" ]; then kill $OLD 2>/dev/null; for i in 1 2 3 4 5 6 7 8 9 10; do lsof -ti tcp:8790 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 0.3; done; fi
 cd "$APP" || exit 1
 export ST_BUNDLE="$BUNDLE"
-exec "$PY" server.py >>"$LOG" 2>&1
+# exec せずに子として動かす（ディスクの許可の確認を「セリフテイク」として出してもらうため）
+"$PY" server.py >>"$LOG" 2>&1

@@ -289,6 +289,14 @@ class H(BaseHTTPRequestHandler):
                 if not p or not Path(p).is_dir():
                     return self.send_json({"files": [], "missing": True})
                 return self.send_json({"path": p, "files": list_folder(p)})
+            if u.path == "/api/diag":
+                out = {"python": os.path.realpath(sys.executable), "pid": os.getpid(), "ppid": os.getppid(), "bundle": os.environ.get("ST_BUNDLE")}
+                try:
+                    out["parent"] = subprocess.run(["ps", "-o", "comm=", "-p", str(os.getppid())], capture_output=True, text=True).stdout.strip()
+                    out["sign"] = subprocess.run(["codesign", "-dv", out["bundle"] or ""], capture_output=True, text=True).stderr.strip().splitlines()[-3:]
+                except Exception as e:
+                    out["err"] = str(e)
+                return self.send_json(out)
             if u.path == "/api/dirs":
                 return self.send_json(list_dirs(q.get("p", [""])[0]))
             if u.path == "/api/job":
