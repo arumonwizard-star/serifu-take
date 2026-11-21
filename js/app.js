@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.0.4';
+export const VERSION = '1.0.5';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1143,7 +1143,7 @@ function openExport() {
   const hasAudio = Object.values(P.media).some(m => m.info && m.info.kind === 'audio');
   openSheet(`<h2>FCPXML書き出し<span class="sp"></span><button id="exClose">閉じる</button></h2>
     <div class="frow"><label>セリフ</label><span>${total}・採用済み ${chosen}</span></div>
-    <div class="frow"><label>素材フォルダの場所</label><input type="text" id="basePath" value="${esc(s.basePath)}" placeholder="/Users/名前/Movies/撮影素材" spellcheck="false"></div>
+    <div class="frow"><label>素材フォルダの場所</label><input type="text" id="basePath" value="${esc(s.basePath)}" placeholder="Finderで素材フォルダを選んで ⌥⌘C → ここに貼り付け" spellcheck="false"></div>
     <div class="frow"><label>未選択のセリフ</label><select id="unsel"><option value="auto">自動候補</option><option value="none">除外</option></select></div>
     <div class="frow"><label>同じテイクの連続</label><select id="join"><option value="1">間ごと結合</option><option value="0">セリフごと分割</option></select></div>
     ${hasAudio ? `<div class="frow"><label>外部音声</label><select id="ext"><option value="1">下に配置</option><option value="0">配置なし</option></select></div>` : ''}
@@ -1152,21 +1152,22 @@ function openExport() {
   $('#unsel').value = s.unselected; $('#join').value = s.joinTakes ? '1' : '0'; $('#kw').value = s.keywords ? '1' : '0';
   if ($('#ext')) $('#ext').value = s.extAudio ? '1' : '0';
   const bp = $('#basePath');
-  bp.addEventListener('change', () => { s.basePath = bp.value.trim(); save(); });
+  const cleanPath = (v) => v.trim().replace(/^['"]|['"]$/g, '').replace(/\\ /g, ' ').replace(/^file:\/\//, '').replace(/\/+$/, '');
+  bp.addEventListener('change', () => { bp.value = cleanPath(bp.value); s.basePath = bp.value; save(); });
   bp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) bp.blur(); });
   $('#unsel').onchange = (e) => { s.unselected = e.target.value; save(); };
   $('#join').onchange = (e) => { s.joinTakes = e.target.value === '1'; save(); };
   $('#kw').onchange = (e) => { s.keywords = e.target.value === '1'; save(); };
   if ($('#ext')) $('#ext').onchange = (e) => { s.extAudio = e.target.value === '1'; save(); };
   $('#exClose').onclick = closeSheet;
-  $('#exGo').onclick = () => { s.basePath = bp.value.trim(); save(); doExport(); };
+  $('#exGo').onclick = () => { bp.value = cleanPath(bp.value); s.basePath = bp.value; save(); doExport(); };
 }
 
 function doExport() {
   const s = P.settings;
   const selList = buildSelection();
   if (!selList.length) { toast('書き出すセリフがありません'); return; }
-  if (!s.basePath) { toast('素材フォルダの場所を入力してください'); $('#basePath').focus(); return; }
+  if (!s.basePath || !s.basePath.startsWith('/')) { toast('素材フォルダの場所を貼り付けてください'); $('#basePath').focus(); return; }
   // 同じテイク・同じ素材が続く場合は結合
   const segs = [];
   for (const x of selList) {
