@@ -13,10 +13,11 @@ mkdir -p "$HOME/Library/Logs" "$SUP"
 echo "=== $(date) 起動 ($BUNDLE) ===" >>"$LOG"
 
 # 署名（Mac の「リムーバブルボリューム」などの許可は署名のあるアプリにしか出ない）
-SIG="$(cat "$0" "$BUNDLE/Contents/Info.plist" 2>/dev/null | md5 -q 2>/dev/null)"
-if [ "$(cat "$SUP/signed" 2>/dev/null)" != "$SIG" ] || ! codesign -v "$BUNDLE" >/dev/null 2>&1; then
-  if [ "$(cat "$SUP/signed" 2>/dev/null)" != "$SIG" ]; then
-    echo "$SIG" >"$SUP/signed"
+# 中身が変わって署名が合わなくなったときも付け直す（30秒以内の連続は避ける）
+if ! codesign -v "$BUNDLE" >/dev/null 2>&1; then
+  LAST="$(cat "$SUP/signed_at" 2>/dev/null || echo 0)"; NOW="$(date +%s)"
+  if [ $((NOW - LAST)) -gt 30 ]; then
+    echo "$NOW" >"$SUP/signed_at"
     xattr -cr "$BUNDLE" 2>/dev/null
     if codesign --force --deep --sign - "$BUNDLE" >>"$LOG" 2>&1; then
       echo "署名しました。起動し直します" >>"$LOG"

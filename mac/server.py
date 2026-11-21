@@ -164,8 +164,25 @@ def list_dirs(p):
                 pass
     except Exception as ex:
         err = str(ex)
+    if err and "not permitted" in err:
+        threading.Thread(target=write_diag, args=(str(cur),), daemon=True).start()
     parent = str(cur.parent) if cur.parent != cur else None
     return {"path": str(cur), "parent": parent, "dirs": dirs, "media": media, "places": places, "error": err}
+
+
+def write_diag(path):
+    """読めなかったときの記録（~/Applications/.serifutake-diag.txt）。原因調べ用"""
+    try:
+        out = ["path: " + path, "python: " + os.path.realpath(sys.executable), "pid %d ppid %d" % (os.getpid(), os.getppid())]
+        for cmd in (["ps", "-o", "pid,ppid,comm", "-p", "%d,%d" % (os.getpid(), os.getppid())],
+                    ["codesign", "-dv", "--verbose=2", os.environ.get("ST_BUNDLE", "")],
+                    ["log", "show", "--last", "2m", "--style", "compact", "--predicate", 'subsystem == "com.apple.TCC"']):
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            out.append("$ " + " ".join(cmd))
+            out.append((r.stdout + r.stderr)[-20000:])
+        (Path.home() / "Applications/.serifutake-diag.txt").write_text("\n".join(out), encoding="utf-8")
+    except Exception as e:
+        log("diag", e)
 
 
 def write_wav16(path, pcm_f32_bytes):
