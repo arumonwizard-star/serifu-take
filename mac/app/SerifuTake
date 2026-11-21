@@ -22,7 +22,12 @@ case "$0" in
     echo "clang: $CC" >>"$LOG"
     if [ -n "$CC" ] && [ -f "$BUNDLE/Contents/Resources/launcher.c" ]; then
       TMPB="$SUP/launcher.bin"
-      if "$CC" -O2 -o "$TMPB" "$BUNDLE/Contents/Resources/launcher.c" >>"$LOG" 2>&1; then
+      OK=""
+      for SDK in "$(xcrun --show-sdk-path 2>/dev/null)" /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk ""; do
+        if [ -n "$SDK" ] && [ -d "$SDK" ]; then SR=(-isysroot "$SDK"); else SR=(); fi
+        if "$CC" -O2 "${SR[@]}" -o "$TMPB" "$BUNDLE/Contents/Resources/launcher.c" >>"$LOG" 2>&1; then OK=1; echo "sdk: $SDK" >>"$LOG"; break; fi
+      done
+      if [ -n "$OK" ]; then
         cp "$0" "$BUNDLE/Contents/Resources/launch.sh" && chmod +x "$BUNDLE/Contents/Resources/launch.sh"
         mv -f "$TMPB" "$BUNDLE/Contents/MacOS/SerifuTake" && chmod +x "$BUNDLE/Contents/MacOS/SerifuTake"
         xattr -cr "$BUNDLE" 2>/dev/null
