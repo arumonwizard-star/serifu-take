@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.0.1';
+export const VERSION = '1.0.2';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1003,7 +1003,13 @@ function closeSheet() { $('#sheet').classList.remove('on'); }
 function openScript() {
   openSheet(`<h2>台本<span class="sp"></span><button id="sFile">台本ファイル読込</button><button id="sApply" class="primary">台本反映</button></h2>
     <textarea id="sText" spellcheck="false" placeholder="# Scene 1&#10;A「ふざけんなよ、あいつのこと忘れんなよ。」&#10;B「そうだけど。」">${esc(P.scriptText)}</textarea>`);
-  $('#sApply').onclick = async () => { await withBusy(() => applyScript($('#sText').value)); closeSheet(); render(); toast('台本を反映しました'); };
+  $('#sApply').onclick = async () => {
+    try { await withBusy(() => applyScript($('#sText').value)); }
+    catch (e) { console.error(e); toast('台本の読み込みエラー：' + (e.message || e)); return; }
+    const n = P.scenes.reduce((a, s) => a + s.lines.length, 0);
+    closeSheet(); render();
+    toast(n ? `台本を反映しました（${P.scenes.length}シーン・${n}セリフ）` : 'セリフが見つかりませんでした');
+  };
   $('#sFile').onclick = () => $('#scriptInput').click();
 }
 

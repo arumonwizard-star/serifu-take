@@ -82,6 +82,7 @@ export function parseScript(text) {
   let pendingRole = null;
   let lastRole = null;
   let n = 0;
+  const others = [];
   const newScene = (name) => { scene = { id: 'S' + (scenes.length + 1), name: name || ('Scene ' + (scenes.length + 1)), lines: [] }; scenes.push(scene); pendingRole = null; lastRole = null; };
   const addLine = (role, t) => {
     t = t.trim().replace(/^[「『]/, '').replace(/[」』]$/, '').trim();
@@ -102,10 +103,19 @@ export function parseScript(text) {
     if ((m = line.match(/^([^「『：:]{1,12}?)\s*[：:]\s*(.+)$/))) { addLine(m[1].trim(), m[2]); pendingRole = null; continue; }
     // 「セリフ」のみ（直前の名前行か直前の話者）
     if ((m = line.match(/^[「『](.*?)[」』]?\s*$/))) { addLine(pendingRole || lastRole || '?', m[1]); continue; }
+    // 名前　セリフ（全角スペース・タブ・空白区切り）
+    if ((m = line.match(/^([^\s　「『：:（(、。]{1,8})[\t　 ]+(.+)$/)) && !/^[（(]/.test(m[2])) { addLine(m[1], m[2]); pendingRole = null; continue; }
     // 名前だけの行
     if (line.length <= 10 && !/[。、！？!?]/.test(line)) { pendingRole = line; continue; }
+    // 名前の直後の行はセリフ
+    if (pendingRole) { addLine(pendingRole, line); continue; }
     // それ以外はト書き
     pendingRole = null;
+    others.push(line);
+  }
+  // セリフが1つも見つからないときは、各行をセリフとして扱う
+  if (!n) {
+    for (const l of others) addLine('?', l);
   }
   return scenes;
 }
