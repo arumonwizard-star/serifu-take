@@ -91,6 +91,15 @@ def find_model():
     return None
 
 
+def python_app():
+    """Mac の許可設定（フルディスクアクセス）に追加すべき Python の場所"""
+    cands = [Path(sys.base_prefix) / "Resources/Python.app", Path(os.path.realpath(sys.executable))]
+    for c in cands:
+        if c.exists():
+            return str(c)
+    return sys.executable
+
+
 def web_version():
     try:
         return json.loads((WEB / "version.json").read_text())["version"]
@@ -415,6 +424,16 @@ class H(BaseHTTPRequestHandler):
                         JOBS[jid].update(done=True, error=str(e))
                 threading.Thread(target=work, daemon=True).start()
                 return self.send_json({"id": jid})
+            if u.path == "/api/open-privacy":
+                subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"])
+                time.sleep(0.8)
+                subprocess.run(["open", "-R", python_app()])
+                return self.send_json({"ok": True, "python": python_app()})
+            if u.path == "/api/relaunch":
+                app = HERE.parent.parent
+                subprocess.Popen(["/bin/sh", "-c", 'sleep 1; open "%s"' % str(app)])
+                threading.Thread(target=lambda: (time.sleep(0.3), os._exit(0)), daemon=True).start()
+                return self.send_json({"ok": True})
             if u.path == "/api/reveal":
                 req = json.loads(self.body() or b"{}")
                 subprocess.run(["open", "-R", req.get("path", "")])

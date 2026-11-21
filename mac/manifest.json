@@ -1,14 +1,14 @@
 {
- "version": "1.1.3",
+ "version": "1.1.4",
  "files": {
   "web/index.html": "119814b2359a3241b984772803aeb7cc8f668fcc",
-  "web/style.css": "db25f1c3ebb3edcf67795adb1b548740dfe04ca0",
+  "web/style.css": "1e23abe18c45f03c1df3f8d52918450ba6ec94de",
   "web/manifest.webmanifest": "8e03a0a3d40a20d6940e789fd22b3b7bdaa9d595",
-  "web/version.json": "54edaf7dcad51e6bdd5453744cf9a225ca64cccb",
+  "web/version.json": "28cd396b7fe3909d345a389d76964f3ce8331cb4",
   "web/sw.js": "e1b440cb11c6a7525d2acda7a61286367bced5e5",
   "web/js/align.js": "368464da078521606de8f749862214958b116a3a",
   "web/js/analysis.js": "fd115b71e0efcb7387506aed90d37fed0b5ac788",
-  "web/js/app.js": "6fbf58da2196f44eb6aaf2ae00e3be7d33afbed8",
+  "web/js/app.js": "1c352299653f0a841496a307f6f294597c502a57",
   "web/js/asr-worker.js": "50c3f1fa0919001e3d5e0a4f40e63da32d9ea3ef",
   "web/js/fcpxml.js": "5d967dab9ff0ee7e3d21d9dfe526fae3f14c6cd7",
   "web/js/media.js": "da6fde64818ebb4d3b9d5671ad03e9915f5f026d",
@@ -33,7 +33,7 @@
   "web/vendor/kuromoji/dict/unk_map.dat.gz": "4a60b9d9051ac08d688b704e07d6cd493e74733c",
   "web/vendor/kuromoji/dict/unk_pos.dat.gz": "8b05b9ced4588b19580d6c39011a82c80e352fc4",
   "web/vendor/kuromoji/kuromoji.js": "55da01f69c0c767deb58f4d986173bc1b3c46b33",
-  "server.py": "b596fad404b8639106516686d7f0e10c15169e39",
+  "server.py": "416c7f2b0bf0efca2228fb61fb1e878f625b463b",
   "AppIcon.icns": "6d1d8a6658ded6ee5cbfea7f2f442207c4ca2f97"
  }
 }

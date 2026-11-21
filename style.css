@@ -168,3 +168,8 @@ table.media input { width: 110px; padding: 2px 6px; }
 .fbCnt { flex: none; }
 .fbList { flex: 1; overflow: auto; padding-top: 6px; }
 .fbDir::before { content: ''; display: inline-block; width: 14px; height: 11px; margin-right: 8px; border-radius: 2px; background: #4d9bff; vertical-align: -1px; }
+
+.perm { margin: 16px 4px; padding: 14px 16px; border-radius: 10px; background: rgba(243,198,74,.1); border: 1px solid rgba(243,198,74,.35); }
+.perm .pt { font-weight: 700; color: #f3dd9a; margin-bottom: 6px; }
+.perm ol { margin: 6px 0 12px; padding-left: 20px; line-height: 1.9; }
+.perm .row { display: flex; gap: 8px; }
