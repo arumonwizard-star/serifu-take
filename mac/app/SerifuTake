@@ -6,13 +6,12 @@ BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
 SEED="$BUNDLE/Contents/Resources/app"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 LOG="$HOME/Library/Logs/SerifuTake.log"
+[ -f "$HOME/Applications/.serifutake-debug" ] && LOG="$HOME/Applications/.serifutake-launch.log"   # 調査中だけ、Claude から読める場所に記録
 SUP="$HOME/Library/Application Support/SerifuTake"
 APP="$SUP/app"
 mkdir -p "$HOME/Library/Logs" "$SUP"
 [ -f "$LOG" ] && [ "$(stat -f%z "$LOG" 2>/dev/null || echo 0)" -gt 2000000 ] && mv -f "$LOG" "$LOG.1"
 echo "=== $(date) 起動 ($BUNDLE) \$0=$0 ===" >>"$LOG"
-# 調査用：起動の記録を Claude からも読める場所に写す（終了時）
-trap 'tail -n 80 "$LOG" >"$HOME/Applications/.serifutake-launch.log" 2>/dev/null' EXIT
 
 # 初回：起動役を Mac の中でちゃんとしたアプリ本体（launcher.c）に置き換える
 # （シェルのままだと、Mac が外付けディスクなどの許可の確認を出さずに断るため）

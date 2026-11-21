@@ -33,7 +33,7 @@
   "web/vendor/kuromoji/dict/unk_map.dat.gz": "4a60b9d9051ac08d688b704e07d6cd493e74733c",
   "web/vendor/kuromoji/dict/unk_pos.dat.gz": "8b05b9ced4588b19580d6c39011a82c80e352fc4",
   "web/vendor/kuromoji/kuromoji.js": "55da01f69c0c767deb58f4d986173bc1b3c46b33",
-  "server.py": "e1993dc6d7c0427666bb00e35f767fa1cb5ab6aa",
+  "server.py": "ad6da916eced2e9946e7e639ee83d4e796421552",
   "AppIcon.icns": "6d1d8a6658ded6ee5cbfea7f2f442207c4ca2f97"
  }
 }

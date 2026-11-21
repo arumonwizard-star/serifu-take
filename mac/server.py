@@ -171,6 +171,8 @@ def list_dirs(p):
 
 
 def write_diag(path):
+    if not (Path.home() / "Applications/.serifutake-debug").exists():
+        return
     """読めなかったときの記録（~/Applications/.serifutake-diag.txt）。原因調べ用"""
     try:
         out = ["path: " + path, "python: " + os.path.realpath(sys.executable), "pid %d ppid %d" % (os.getpid(), os.getppid())]
