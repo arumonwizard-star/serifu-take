@@ -40,6 +40,27 @@ MODEL_CANDIDATES = [
 MEDIA_EXT = {".mov", ".mp4", ".m4v", ".wav", ".bwf", ".txt", ".md", ".fountain"}
 JOBS = {}
 LOCK = threading.Lock()
+WIN = []  # 専用ウインドウ（あれば、その中でフォルダ選択・保存の画面を出す）
+
+
+def dialog_folder():
+    if WIN:
+        import webview
+        r = WIN[0].create_file_dialog(webview.FOLDER_DIALOG)
+        if not r:
+            return None
+        return r[0] if isinstance(r, (list, tuple)) else r
+    return osascript('tell me to activate\nPOSIX path of (choose folder with prompt "素材フォルダを選択")')
+
+
+def dialog_save(name, where):
+    if WIN:
+        import webview
+        r = WIN[0].create_file_dialog(webview.SAVE_DIALOG, directory=where, save_filename=name + ".fcpxml")
+        if not r:
+            return None
+        return r[0] if isinstance(r, (list, tuple)) else r
+    return osascript('tell me to activate\nPOSIX path of (choose file name with prompt "FCPXMLの保存先" default name "%s.fcpxml" default location (POSIX file "%s"))' % (name, where.replace('"', "")))
 
 
 def log(*a):
@@ -318,7 +339,7 @@ class H(BaseHTTPRequestHandler):
             u = urllib.parse.urlparse(self.path)
             q = urllib.parse.parse_qs(u.query)
             if u.path == "/api/pick-folder":
-                p = os.environ.get("ST_FAKE_PICK") or osascript('POSIX path of (choose folder with prompt "素材フォルダを選択")')
+                p = os.environ.get("ST_FAKE_PICK") or dialog_folder()
                 if not p:
                     return self.send_json({"cancel": True})
                 p = p.rstrip("/")
@@ -342,7 +363,7 @@ class H(BaseHTTPRequestHandler):
                 if os.environ.get("ST_FAKE_SAVE"):
                     path = os.environ["ST_FAKE_SAVE"]
                 else:
-                    path = osascript('POSIX path of (choose file name with prompt "FCPXMLの保存先" default name "%s.fcpxml" default location (POSIX file "%s"))' % (name, where.replace('"', "")))
+                    path = dialog_save(name, where)
                 if not path:
                     return self.send_json({"cancel": True})
                 if not path.lower().endswith(".fcpxml"):
@@ -374,6 +395,18 @@ def serve():
     return srv
 
 
+def set_app_name():
+    # メニューバーの表示を「Python」ではなく「セリフテイク」に
+    try:
+        from Foundation import NSBundle
+        info = NSBundle.mainBundle().localizedInfoDictionary() or NSBundle.mainBundle().infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "セリフテイク"
+            info["CFBundleDisplayName"] = "セリフテイク"
+    except Exception:
+        pass
+
+
 def set_dock_icon():
     try:
         from AppKit import NSApplication, NSImage
@@ -400,7 +433,9 @@ def main():
             time.sleep(3600)
     try:
         import webview
+        set_app_name()
         win = webview.create_window("セリフテイク", url, width=1500, height=950, min_size=(1000, 650), background_color="#121418")
+        WIN.append(win)
         storage = SUPPORT / "webview"
         storage.mkdir(exist_ok=True)
         webview.start(set_dock_icon, private_mode=False, storage_path=str(storage))
