@@ -2,7 +2,7 @@
 import os, sys, time, json, subprocess, tempfile, signal
 from playwright.sync_api import sync_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RES = os.path.join(ROOT, 'dist/セリフテイク.app/Contents/Resources')
+RES = os.path.join(ROOT, 'dist/セリフテイク.app/Contents/Resources/app')
 sup = tempfile.mkdtemp()
 env = dict(os.environ, ST_PORT='8795', ST_HEADLESS='1', ST_NO_UPDATE='1', ST_SUPPORT=sup,
            ST_WHISPER=os.path.join(ROOT, 'tests/fake_whisper.py'), ST_MODEL='/dev/null',

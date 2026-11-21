@@ -1,13 +1,37 @@
 #!/bin/bash
-# セリフテイク.app の起動部分。裏方（server.py）を専用ウインドウ付きで動かす。
-RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+# セリフテイク.app の起動部分。
+# アプリ本体（server.py と画面）は ~/Library/Application Support/SerifuTake/app に置き、そこで自動更新する。
+# .app 自体は変えないので、Mac の許可（署名に結びつく）が更新で外れない。
+BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
+SEED="$BUNDLE/Contents/Resources/app"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 LOG="$HOME/Library/Logs/SerifuTake.log"
 SUP="$HOME/Library/Application Support/SerifuTake"
+APP="$SUP/app"
 mkdir -p "$HOME/Library/Logs" "$SUP"
-# ログは大きくなりすぎないように
 [ -f "$LOG" ] && [ "$(stat -f%z "$LOG" 2>/dev/null || echo 0)" -gt 2000000 ] && mv -f "$LOG" "$LOG.1"
-echo "=== $(date) 起動 ===" >>"$LOG"
+echo "=== $(date) 起動 ($BUNDLE) ===" >>"$LOG"
+
+# 署名（Mac の「リムーバブルボリューム」などの許可は署名のあるアプリにしか出ない）
+SIG="$(cat "$0" "$BUNDLE/Contents/Info.plist" 2>/dev/null | md5 -q 2>/dev/null)"
+if [ "$(cat "$SUP/signed" 2>/dev/null)" != "$SIG" ] || ! codesign -v "$BUNDLE" >/dev/null 2>&1; then
+  if [ "$(cat "$SUP/signed" 2>/dev/null)" != "$SIG" ]; then
+    echo "$SIG" >"$SUP/signed"
+    xattr -cr "$BUNDLE" 2>/dev/null
+    if codesign --force --deep --sign - "$BUNDLE" >>"$LOG" 2>&1; then
+      echo "署名しました。起動し直します" >>"$LOG"
+      (sleep 1; open "$BUNDLE") >/dev/null 2>&1 &
+      exit 0
+    fi
+  fi
+fi
+
+# アプリ本体の用意（初回、または .app に入っている版の方が新しいとき）
+ver() { sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' "$1/web/version.json" 2>/dev/null; }
+SV="$(ver "$SEED")"; AV="$(ver "$APP")"
+if [ ! -f "$APP/server.py" ] || { [ -n "$SV" ] && [ "$SV" != "$AV" ] && [ "$(printf '%s\n%s\n' "$SV" "$AV" | sort -V | tail -1)" = "$SV" ]; }; then
+  mkdir -p "$APP" && cp -R "$SEED/." "$APP/" && echo "本体を $SV にしました" >>"$LOG"
+fi
 
 # 使う python（専用ウインドウの部品 pywebview が入っているものを優先。CH Cut の環境も使える）
 PY=""
@@ -33,8 +57,8 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 echo "python: $PY" >>"$LOG"
-# 前回の残りが動いていれば終了させる
 OLD=$(lsof -ti tcp:8790 -sTCP:LISTEN 2>/dev/null)
 if [ -n "$OLD" ]; then kill $OLD 2>/dev/null; for i in 1 2 3 4 5 6 7 8 9 10; do lsof -ti tcp:8790 -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 0.3; done; fi
-cd "$RES" || exit 1
+cd "$APP" || exit 1
+export ST_BUNDLE="$BUNDLE"
 exec "$PY" server.py >>"$LOG" 2>&1

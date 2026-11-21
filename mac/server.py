@@ -25,7 +25,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent            # .app/Contents/Resources
+HERE = Path(__file__).resolve().parent            # ~/Library/Application Support/SerifuTake/app
 WEB = HERE / "web"
 SUPPORT = Path(os.environ.get("ST_SUPPORT", Path.home() / "Library/Application Support/SerifuTake"))
 SUPPORT.mkdir(parents=True, exist_ok=True)
@@ -426,12 +426,10 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"id": jid})
             if u.path == "/api/open-privacy":
                 subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"])
-                time.sleep(0.8)
-                subprocess.run(["open", "-R", python_app()])
                 return self.send_json({"ok": True, "python": python_app()})
             if u.path == "/api/relaunch":
-                app = HERE.parent.parent
-                subprocess.Popen(["/bin/sh", "-c", 'sleep 1; open "%s"' % str(app)])
+                app = os.environ.get("ST_BUNDLE") or str(Path.home() / "Applications/セリフテイク.app")
+                subprocess.Popen(["/bin/sh", "-c", 'sleep 1; open "%s"' % app])
                 threading.Thread(target=lambda: (time.sleep(0.3), os._exit(0)), daemon=True).start()
                 return self.send_json({"ok": True})
             if u.path == "/api/reveal":

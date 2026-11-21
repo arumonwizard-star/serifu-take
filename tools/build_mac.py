@@ -25,6 +25,9 @@ def main():
     res = app / "Contents/Resources"
     (app / "Contents/MacOS").mkdir(parents=True)
     res.mkdir(parents=True)
+    shutil.copy(ROOT / "mac/AppIcon.icns", res / "AppIcon.icns")
+    res = res / "app"   # 初回に ~/Library/Application Support/SerifuTake/app へ写す本体
+    res.mkdir()
     shutil.copy(ROOT / "mac/app/Info.plist", app / "Contents/Info.plist")
     exe = app / "Contents/MacOS/SerifuTake"
     shutil.copy(ROOT / "mac/app/SerifuTake", exe)
