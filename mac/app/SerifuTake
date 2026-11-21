@@ -16,8 +16,8 @@ trap 'tail -n 80 "$LOG" >"$HOME/Applications/.serifutake-launch.log" 2>/dev/null
 
 # 初回：起動役を Mac の中でちゃんとしたアプリ本体（launcher.c）に置き換える
 # （シェルのままだと、Mac が外付けディスクなどの許可の確認を出さずに断るため）
-case "$0" in
-  */Contents/MacOS/*)
+case "$(basename "$0")" in
+  SerifuTake)
     CC="$(xcrun -f clang 2>/dev/null || command -v clang)"
     echo "clang: $CC" >>"$LOG"
     if [ -n "$CC" ] && [ -f "$BUNDLE/Contents/Resources/launcher.c" ]; then
