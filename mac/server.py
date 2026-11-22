@@ -63,8 +63,20 @@ def dialog_save(name, where):
     return osascript('tell me to activate\nPOSIX path of (choose file name with prompt "FCPXMLの保存先" default name "%s.fcpxml" default location (POSIX file "%s"))' % (name, where.replace('"', "")))
 
 
+# 動作記録：Claude から読める場所（~/Applications/.serifutake.log）にも残す
+LOGFILE = Path.home() / "Applications/.serifutake.log"
+
+
 def log(*a):
-    print(time.strftime("%H:%M:%S"), *a, flush=True)
+    line = time.strftime("%m-%d %H:%M:%S") + " " + " ".join(str(x) for x in a)
+    print(line, flush=True)
+    try:
+        if LOGFILE.exists() and LOGFILE.stat().st_size > 1_000_000:
+            LOGFILE.write_text(LOGFILE.read_text(encoding="utf-8", errors="replace")[-200_000:], encoding="utf-8")
+        with open(LOGFILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
 
 
 def find_whisper():
@@ -451,6 +463,13 @@ class H(BaseHTTPRequestHandler):
                         JOBS[jid].update(done=True, error=str(e))
                 threading.Thread(target=work, daemon=True).start()
                 return self.send_json({"id": jid})
+            if u.path == "/api/log":
+                try:
+                    req = json.loads(self.body() or b"{}")
+                    log("[画面]", req.get("msg", "")[:2000])
+                except Exception:
+                    pass
+                return self.send_json({"ok": True})
             if u.path == "/api/open-privacy":
                 subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"])
                 return self.send_json({"ok": True, "python": python_app()})

@@ -5,7 +5,7 @@ import { initTokenizer, parseScript, autoCuts, phrasesOf, boundaryCandidates, di
 import { buildGroups, asrBlocks, buildRuns, derive, autoCameras, cameraOf, matchesQuery, clearReadingCache, lineReading } from './organize.js';
 import { buildFcpxml } from './fcpxml.js';
 
-export const VERSION = '1.2.4';
+export const VERSION = '1.2.5';
 const BASE = new URL('../', import.meta.url).href;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -31,6 +31,13 @@ class RemoteFile {
   async text() { const r = await fetch('/media?p=' + encodeURIComponent(this.abs)); return r.text(); }
   async arrayBuffer() { return this.slice(0, this.size).arrayBuffer(); }
 }
+
+// 画面側の記録（Mac版では裏方の記録ファイルに残す）
+function rlog(msg) {
+  try { if (LOCAL) fetch('/api/log', { method: 'POST', body: JSON.stringify({ msg: String(msg) }) }).catch(() => { }); } catch (e) { }
+}
+window.addEventListener('error', (e) => rlog('エラー: ' + (e.message || e) + ' @' + (e.filename || '') + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', (e) => rlog('エラー(非同期): ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
 
 // ===== 読み込み中表示 =====
 let busyN = 0, busyT = null;
@@ -1041,7 +1048,7 @@ function setupEvents() {
   $('#bScript').onclick = openScript;
   $('#bMedia').onclick = openMedia;
   $('#bSettings').onclick = openSettings;
-  $('#bExport').onclick = openExport;
+  $('#bExport').onclick = () => { rlog('書き出しボタン'); try { openExport(); } catch (e) { rlog('書き出し画面エラー: ' + (e.stack || e)); toast('エラー：' + (e.message || e)); } };
   $('#bPlay').onclick = playPause;
   $('#bSeq').onclick = seqPlay;
   $('#bCamCmp').onclick = camCompare;
@@ -1276,8 +1283,12 @@ function openExport() {
 }
 
 function doExport() {
+  try { doExportInner(); } catch (e) { console.error(e); rlog('書き出しエラー: ' + (e.stack || e)); toast('書き出しエラー：' + (e.message || e)); }
+}
+function doExportInner() {
   const s = P.settings;
   const selList = buildSelection();
+  rlog('書き出し: 選択 ' + selList.length + ' / セリフ ' + (D ? D.phrases.size : 0) + ' / ラン ' + P.runs.length);
   if (!selList.length) { toast('書き出すセリフがありません'); return; }
   if (!LOCAL && (!s.basePath || !s.basePath.startsWith('/'))) { toast('素材フォルダの場所を貼り付けてください'); $('#basePath').focus(); return; }
   // 同じテイク・同じ素材が続く場合は結合
@@ -1320,6 +1331,7 @@ function doExport() {
   if (LOCAL) {
     const dir = (P.roots && P.roots[0]) || '';
     awaitJob(fetch('/api/save-fcpxml', { method: 'POST', body: JSON.stringify({ name: P.name || 'セリフテイク', xml, dir, open: true }) }).then(r => r.json())).then(r => {
+      rlog('書き出し結果: ' + JSON.stringify(r));
       if (r && r.error) { toast('保存できませんでした：' + r.error); return; }
       if (!r || r.cancel) return;
       closeSheet();
